@@ -17,16 +17,15 @@ ux, uy need not be normalised; (0,0) means thrust along velocity.
 from __future__ import annotations
 
 import math
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import numpy as np
-
 from bodies import Body
 
 Control = Callable[[float, np.ndarray], tuple]
 
 
-def _accel(t: float, s: np.ndarray, body: Body, control: Optional[Control],
+def _accel(t: float, s: np.ndarray, body: Body, control: Control | None,
            ve: float, cda: float, lod: float, lift_sign: float) -> np.ndarray:
     x, y, vx, vy, m = s
     r = math.hypot(x, y)
@@ -68,7 +67,7 @@ def _accel(t: float, s: np.ndarray, body: Body, control: Optional[Control],
 
 
 def rk4(t: float, s: np.ndarray, dt: float, body: Body,
-        control: Optional[Control] = None, ve: float = 1.0,
+        control: Control | None = None, ve: float = 1.0,
         cda: float = 0.0, lod: float = 0.0, lift_sign: float = 1.0,
         m_min: float = 0.0) -> np.ndarray:
     """One RK4 step. Mass is clamped at m_min (dry mass)."""
@@ -85,10 +84,10 @@ def rk4(t: float, s: np.ndarray, dt: float, body: Body,
 
 
 def propagate(s: np.ndarray, t0: float, t_max: float, dt: float, body: Body,
-              control: Optional[Control] = None, ve: float = 1.0,
+              control: Control | None = None, ve: float = 1.0,
               cda: float = 0.0, lod: float = 0.0, lift_sign: float = 1.0,
               m_min: float = 0.0,
-              stop: Optional[Callable[[float, np.ndarray], bool]] = None,
+              stop: Callable[[float, np.ndarray], bool] | None = None,
               record_every: int = 0):
     """Propagate until t_max or stop(t, s) is True.
 
@@ -97,7 +96,7 @@ def propagate(s: np.ndarray, t0: float, t_max: float, dt: float, body: Body,
     """
     t = t0
     hist = []
-    steps = int(round((t_max - t0) / dt))
+    steps = round((t_max - t0) / dt)
     for i in range(steps):
         if stop is not None and stop(t, s):
             break

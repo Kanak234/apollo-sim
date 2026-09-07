@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import math
 
-from bodies import EARTH, MOON, EARTH_MOON_DIST
 import kepler
+from bodies import EARTH, EARTH_MOON_DIST, MOON
 
 MOON_SOI = 6.61e7
 V_MOON = math.sqrt(EARTH.mu / EARTH_MOON_DIST)   # 1,018 m/s circular
@@ -84,7 +84,7 @@ def _selenocentric(arr: dict, lam: float):
     e = math.sqrt(max(0.0, 1.0 + 2.0 * energy * h * h / MOON.mu ** 2))
     rp = h * h / MOON.mu / (1.0 + e)
     v_inf = math.sqrt(max(0.0, 2.0 * energy))
-    return {"v2": v2, "rp": rp, "e": e, "energy": energy, "v_inf": v_inf,
+    return {"v2": v2, "rp": rp, "e": e, "a": a, "energy": energy, "v_inf": v_inf,
             "h": h}
 
 
@@ -97,7 +97,7 @@ def design_tli(r_leo: float, perilune_alt: float = 111_000.0):
     v_hoh = kepler.circular_velocity(EARTH.mu, r_leo) + tli_delta_v_hohmann(
         r_leo)
     best = None
-    for dv_extra in [x * 2.0 for x in range(0, 60)]:          # 0..118 m/s
+    for dv_extra in [x * 2.0 for x in range(60)]:          # 0..118 m/s
         v_p = v_hoh + dv_extra
         for lam_deg in range(5, 85, 2):
             lam = math.radians(lam_deg)

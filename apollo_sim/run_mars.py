@@ -7,10 +7,9 @@ from __future__ import annotations
 import math
 import sys
 
-import numpy as np
-
-import marstransfer as mt
 import marsops as mo
+import marstransfer as mt
+import numpy as np
 from bodies import EARTH, MARS
 
 

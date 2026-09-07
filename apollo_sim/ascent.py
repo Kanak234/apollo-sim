@@ -13,11 +13,10 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-import numpy as np
-
-from bodies import EARTH, G0, EARTH_ROT_SPEED_KSC
 import engine
 import kepler
+import numpy as np
+from bodies import EARTH, EARTH_ROT_SPEED_KSC, G0
 
 
 @dataclass
@@ -49,19 +48,37 @@ PAYLOAD = 30_320.0 + 15_100.0 + 4_000.0   # CSM + LM + SLA/IU approx [kg]
 CDA_STACK = 0.5 * math.pi * (10.06 / 2) ** 2   # Cd=0.5, D=10.06 m
 
 TARGET_ALT = 185_000.0
-PITCH_START_ALT = 1_500.0     # m — begin pitch-over
-PITCH_END_ALT = 48_000.0      # m — fully following velocity after this
-PITCH_MAX = math.radians(72.0)
+PITCH_START_ALT = 100.0       # m — begin pitch-over
+PITCH_S1_ALT = 35_500.0       # m — end of S-IC pitch ramp
+PITCH_S1_MAX = math.radians(58.6)
+PITCH_S2_ALT = 122_000.0      # m — end of S-II pitch ramp
+PITCH_S2_MAX = math.radians(74.2)
+PITCH_MAX = PITCH_S2_MAX
+
+
+def _pitch_s1(alt: float) -> float:
+    """Prescribed pitch program for S-IC boost phase."""
+    if alt <= PITCH_START_ALT:
+        return 0.0
+    if alt <= PITCH_S1_ALT:
+        return PITCH_S1_MAX * (alt - PITCH_START_ALT) / (PITCH_S1_ALT - PITCH_START_ALT)
+    return PITCH_S1_MAX
+
+
+def _pitch_s2(alt: float) -> float:
+    """Prescribed pitch program for S-II boost phase."""
+    if alt <= PITCH_S1_ALT:
+        return PITCH_S1_MAX
+    if alt <= PITCH_S2_ALT:
+        return PITCH_S1_MAX + (PITCH_S2_MAX - PITCH_S1_MAX) * (alt - PITCH_S1_ALT) / (PITCH_S2_ALT - PITCH_S1_ALT)
+    return PITCH_S2_MAX
 
 
 def _pitch_from_vertical(alt: float) -> float:
-    """Prescribed pitch program: 0 at PITCH_START, PITCH_MAX at PITCH_END."""
-    if alt <= PITCH_START_ALT:
-        return 0.0
-    if alt >= PITCH_END_ALT:
-        return PITCH_MAX
-    f = (alt - PITCH_START_ALT) / (PITCH_END_ALT - PITCH_START_ALT)
-    return PITCH_MAX * f
+    """Prescribed pitch program across boost phase."""
+    if alt <= PITCH_S1_ALT:
+        return _pitch_s1(alt)
+    return _pitch_s2(alt)
 
 
 def fly_to_orbit(dt: float = 0.2, record: bool = True):
@@ -77,34 +94,22 @@ def fly_to_orbit(dt: float = 0.2, record: bool = True):
     t = 0.0
     stage_log = []
 
-    def make_control(stage: Stage, mode: str, m_dry_below: float):
-        def ctrl(tt, ss):
-            alt = math.hypot(ss[0], ss[1]) - EARTH.radius
-            thrust, isp = stage.thrust_isp(alt)
-            if ss[4] <= m_dry_below:
-                return (0.0, 0.0, 0.0)
-            if mode == "pitch":
-                # rotate local radial-out by pitch toward local east
-                r = math.hypot(ss[0], ss[1])
-                rx, ry = ss[0] / r, ss[1] / r
-                ex, ey = -ry, rx            # local east (prograde launch)
-                ph = _pitch_from_vertical(alt)
-                ux = rx * math.cos(ph) + ex * math.sin(ph)
-                uy = ry * math.cos(ph) + ey * math.sin(ph)
-                return (thrust, ux, uy)
-            return (thrust, 0.0, 0.0)       # (0,0) => along velocity
-        return ctrl
-
-    def step_burn(stage: Stage, mode: str, stop):
+    def step_burn(stage: Stage, m_after: float, pitch_fn):
         nonlocal s, t
-        m_after = s[4] - stage.prop
-        ctrl = make_control(stage, mode, m_after)
-        while not stop(t, s) and s[4] > m_after + 1e-6:
+        while s[4] > m_after + 1e-6:
             alt = math.hypot(s[0], s[1]) - EARTH.radius
             thrust, isp = stage.thrust_isp(alt)
             ve = isp * G0
-            # loss ledger (evaluated pre-step)
             r = math.hypot(s[0], s[1])
+            rx, ry = s[0] / r, s[1] / r
+            ex, ey = -ry, rx            # local east (prograde launch)
+            ph = pitch_fn(alt)
+            ux = rx * math.cos(ph) + ex * math.sin(ph)
+            uy = ry * math.cos(ph) + ey * math.sin(ph)
+
+            def ctrl(tt, ss, t_val=thrust, ux_val=ux, uy_val=uy):
+                return (t_val, ux_val, uy_val)
+
             g = EARTH.mu / (r * r)
             gamma = kepler.flight_path_angle(*s[:4])
             v = math.hypot(s[2], s[3])
@@ -113,8 +118,7 @@ def fly_to_orbit(dt: float = 0.2, record: bool = True):
             losses["gravity"] += g * math.sin(max(gamma, 0.0)) * dt
             losses["drag"] += a_drag * dt
             losses["ideal_dv"] += thrust / s[4] * dt
-            s = engine.rk4(t, s, dt, EARTH, ctrl, ve, CDA_STACK,
-                           m_min=m_after)
+            s = engine.rk4(t, s, dt, EARTH, ctrl, ve, CDA_STACK, m_min=m_after)
             t += dt
             if record and int(t / dt) % 25 == 0:
                 hist.append((t, s.copy()))
@@ -123,66 +127,60 @@ def fly_to_orbit(dt: float = 0.2, record: bool = True):
         stage_log.append((stage.name, t, math.hypot(s[0], s[1]) - EARTH.radius,
                           math.hypot(s[2], s[3])))
 
-    never = lambda tt, ss: False
+    # S-IC burn
+    step_burn(S_IC, s[4] - S_IC.prop, _pitch_s1)
 
-    # S-IC: pitch program all the way
-    step_burn(S_IC, "pitch", never)
-    # S-II: keep pitch program until PITCH_END, then prograde
-    step_burn(S_II, "pitch", never)
+    # S-II burn
+    step_burn(S_II, s[4] - S_II.prop, _pitch_s2)
 
-    # S-IVB burn 1: prograde until apoapsis >= target
-    m_after = s[4] - S_IVB.prop
+    # S-IVB burn 1: closed-loop orbital insertion into parking orbit
+    m_after_sivb = s[4] - S_IVB.prop
+    target_rp = 170_050.0
 
-    def apo_reached(tt, ss):
-        el = kepler.elements(*ss[:4], EARTH.mu)
-        return el["ra"] != math.inf and el["ra"] - EARTH.radius >= TARGET_ALT
-
-    ctrl = make_control(S_IVB, "prograde", m_after)
-    while not apo_reached(t, s) and s[4] > m_after + 1e-6:
-        alt = math.hypot(s[0], s[1]) - EARTH.radius
-        thrust, isp = S_IVB.thrust_isp(alt)
+    while s[4] > m_after_sivb + 1e-6:
         r = math.hypot(s[0], s[1])
-        g = EARTH.mu / (r * r)
+        alt = r - EARTH.radius
+        el = kepler.elements(*s[:4], EARTH.mu)
+        if el["rp"] - EARTH.radius >= target_rp:
+            break
+
+        thrust, isp = S_IVB.thrust_isp(alt)
+        ve = isp * G0
+        rx, ry = s[0] / r, s[1] / r
+        ex, ey = -ry, rx
+
+        v_rad = (s[0] * s[2] + s[1] * s[3]) / r
+        g_local = EARTH.mu / (r * r)
+        v_horiz = (s[0] * s[3] - s[1] * s[2]) / r
+        a_centrif = v_horiz * v_horiz / r
+
+        a_rad_cmd = (g_local - a_centrif) + 0.015 * (TARGET_ALT - alt) - 0.25 * v_rad
+        thrust_accel = thrust / s[4]
+        sin_pitch = max(-0.95, min(0.95, a_rad_cmd / thrust_accel))
+        cos_pitch = math.sqrt(1.0 - sin_pitch * sin_pitch)
+        ux = rx * sin_pitch + ex * cos_pitch
+        uy = ry * sin_pitch + ey * cos_pitch
+
         gamma = kepler.flight_path_angle(*s[:4])
-        losses["gravity"] += g * math.sin(max(gamma, 0.0)) * dt
+        losses["gravity"] += g_local * math.sin(max(gamma, 0.0)) * dt
         losses["ideal_dv"] += thrust / s[4] * dt
-        s = engine.rk4(t, s, dt, EARTH, ctrl, isp * G0, CDA_STACK,
-                       m_min=m_after)
+
+        def ctrl(tt, ss, t_val=thrust, ux_val=ux, uy_val=uy):
+            return (t_val, ux_val, uy_val)
+
+        s = engine.rk4(t, s, dt, EARTH, ctrl, ve, CDA_STACK, m_min=m_after_sivb)
         t += dt
         if record and int(t / dt) % 25 == 0:
             hist.append((t, s.copy()))
-    meco1_prop_left = s[4] - m_after
+
     stage_log.append(("S-IVB MECO-1", t,
                       math.hypot(s[0], s[1]) - EARTH.radius,
                       math.hypot(s[2], s[3])))
 
-    # Coast to apoapsis (flight path angle crosses zero from above)
-    def near_apo(tt, ss):
-        el = kepler.elements(*ss[:4], EARTH.mu)
-        r = math.hypot(ss[0], ss[1])
-        return r >= el["ra"] - 1_000.0
-
-    t, s, h2 = engine.propagate(s, t, t + 4_000.0, 1.0, EARTH, stop=near_apo,
-                                record_every=25)
-    hist.extend(h2)
-
-    # Circularize at apoapsis
-    def circ_done(tt, ss):
-        el = kepler.elements(*ss[:4], EARTH.mu)
-        return el["rp"] - EARTH.radius >= TARGET_ALT - 8_000.0
-
-    ctrl = make_control(S_IVB, "prograde", m_after)
-    while not circ_done(t, s) and s[4] > m_after + 1e-6:
-        alt = math.hypot(s[0], s[1]) - EARTH.radius
-        thrust, isp = S_IVB.thrust_isp(alt)
-        losses["ideal_dv"] += thrust / s[4] * dt
-        s = engine.rk4(t, s, dt, EARTH, ctrl, isp * G0, m_min=m_after)
-        t += dt
-
     el = kepler.elements(*s[:4], EARTH.mu)
     return {
         "t": t, "state": s, "elements": el, "losses": losses,
-        "prop_left_sivb": s[4] - m_after,
+        "prop_left_sivb": s[4] - m_after_sivb,
         "stage_log": stage_log, "history": hist,
         "perigee_alt": el["rp"] - EARTH.radius,
         "apogee_alt": el["ra"] - EARTH.radius,

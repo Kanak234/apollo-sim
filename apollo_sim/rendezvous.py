@@ -18,11 +18,10 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-
-from bodies import MOON, G0
 import engine
 import kepler
+import numpy as np
+from bodies import G0, MOON
 
 
 # ---------------------------------------------------------------- CW core

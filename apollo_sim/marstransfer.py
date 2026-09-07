@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-
-from bodies import SUN, EARTH, MARS, SUN_EARTH_DIST, SUN_MARS_DIST
 import kepler
+import numpy as np
+from bodies import EARTH, MARS, SUN, SUN_EARTH_DIST, SUN_MARS_DIST
 
 N_E = math.sqrt(SUN.mu / SUN_EARTH_DIST ** 3)     # rad/s
 N_M = math.sqrt(SUN.mu / SUN_MARS_DIST ** 3)
@@ -77,30 +76,38 @@ def lambert(r1v: np.ndarray, r2v: np.ndarray, tof: float, mu: float,
         return None
 
     def y(z):
-        return r1 + r2 + A * (z * _stumpff_s(z) - 1.0) / math.sqrt(
-            _stumpff_c(z))
+        cz = _stumpff_c(z)
+        if cz <= 1e-12:
+            return -1.0
+        return r1 + r2 + A * (z * _stumpff_s(z) - 1.0) / math.sqrt(cz)
 
     def F(z):
+        cz = _stumpff_c(z)
+        if cz <= 1e-12:
+            return None
         yy = y(z)
         if yy < 0.0:
             return None
-        return ((yy / _stumpff_c(z)) ** 1.5 * _stumpff_s(z)
+        return ((yy / cz) ** 1.5 * _stumpff_s(z)
                 + A * math.sqrt(yy) - math.sqrt(mu) * tof)
 
     # bracket the root in z
-    z_lo, z_hi = -4.0 * math.pi, 4.0 * math.pi ** 2
+    z_lo, z_hi = -4.0 * math.pi, 4.0 * math.pi ** 2 - 0.1
     f_lo = F(z_lo)
-    while f_lo is None:
+    while f_lo is None and z_lo < z_hi:
         z_lo += 1.0
         f_lo = F(z_lo)
     f_hi = F(z_hi)
-    if f_hi is None or f_lo * f_hi > 0.0:
+    while f_hi is None and z_hi > z_lo:
+        z_hi -= 0.5
+        f_hi = F(z_hi)
+    if f_lo is None or f_hi is None or f_lo * f_hi > 0.0:
         return None
     for _ in range(120):
         z = 0.5 * (z_lo + z_hi)
         f = F(z)
         if f is None:
-            z_lo = z
+            z_hi = z
             continue
         if abs(f) < 1e-6:
             break
