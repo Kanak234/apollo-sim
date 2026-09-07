@@ -1,12 +1,13 @@
 """Phase 8 checks — the Saturn V must reach orbit with an honest ledger."""
 import math
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
-
 import ascent
-from bodies import EARTH, G0
+import pytest
+from bodies import G0
 
 
 @pytest.fixture(scope="module")

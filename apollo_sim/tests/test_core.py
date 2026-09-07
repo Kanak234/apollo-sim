@@ -1,14 +1,15 @@
 """Core checks: the engine must reproduce analytical two-body results."""
 import math
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import numpy as np
-import pytest
-
-from bodies import EARTH, MOON
 import engine
 import kepler
+import numpy as np
+import pytest
+from bodies import EARTH, MOON
 
 
 class TestOrbits:

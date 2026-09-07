@@ -1,21 +1,24 @@
 """Phases 11-12 + automated descent checks."""
 import math
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import descent_auto
+import entry
 import numpy as np
 import pytest
-
 import rendezvous as rz
-import entry
-import descent_auto
 from bodies import MOON
 
 
+@pytest.fixture(scope="class")
+def flight():
+    return rz.fly_ascent()
+
+
 class TestLunarAscent:
-    @pytest.fixture(scope="class")
-    def flight(self):
-        return rz.fly_ascent()
 
     def test_insertion(self, flight):
         assert flight["insertion_ok"]
@@ -36,7 +39,7 @@ class TestCW:
     def test_two_impulse_intercept_arrives(self):
         r0, v0 = [-5_000.0, -20_000.0], [0.0, 0.0]
         T = 2.0 * math.pi / self.n
-        dv1, dv2, tot = rz.two_impulse_intercept(r0, v0, self.n, T / 2.0)
+        dv1, _dv2, tot = rz.two_impulse_intercept(r0, v0, self.n, T / 2.0)
         r_end, _ = rz.cw_propagate(r0, np.array(v0) + dv1, self.n, T / 2.0)
         assert np.linalg.norm(r_end) < 1.0            # metres
         assert 1.0 < tot < 50.0                       # m/s, sane cost
@@ -54,7 +57,7 @@ class TestCW:
         assert r_t[1] > 0.0
 
     def test_stm_identity_at_t0(self):
-        Mrr, Mrv, Mvr, Mvv = rz.cw_matrices(self.n, 0.0)
+        Mrr, Mrv, _Mvr, Mvv = rz.cw_matrices(self.n, 0.0)
         assert np.allclose(Mrr, np.eye(2))
         assert np.allclose(Mvv, np.eye(2))
         assert np.allclose(Mrv, np.zeros((2, 2)))

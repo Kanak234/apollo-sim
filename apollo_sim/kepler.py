@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-
 
 def vis_viva(mu: float, r: float, a: float) -> float:
     """Orbital speed at radius r on an orbit of semi-major axis a."""

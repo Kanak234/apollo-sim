@@ -15,10 +15,9 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-
-from bodies import MARS, G0
 import engine
+import numpy as np
+from bodies import G0, MARS
 
 # ---------------------------------------------------------------- depot
 BOILOFF_PER_DAY = {          # fraction of remaining propellant per day

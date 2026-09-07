@@ -12,15 +12,13 @@ from __future__ import annotations
 import math
 import sys
 
-import numpy as np
-
 import ascent
-import transfer
 import descent_auto
-import rendezvous as rz
 import entry
-import kepler
-from bodies import EARTH, MOON, G0
+import numpy as np
+import rendezvous as rz
+import transfer
+from bodies import EARTH, G0, MOON
 
 
 def hms(seconds: float) -> str:
@@ -132,7 +130,8 @@ def _plots(fl, en):
     v = [math.hypot(h[1][2], h[1][3]) for h in fl["history"]]
     fig, ax1 = plt.subplots(figsize=(9, 5))
     ax1.plot(t, alt, "b-", label="altitude [km]")
-    ax1.set_xlabel("time [s]"); ax1.set_ylabel("altitude [km]", color="b")
+    ax1.set_xlabel("time [s]")
+    ax1.set_ylabel("altitude [km]", color="b")
     ax2 = ax1.twinx()
     ax2.plot(t, v, "r-", label="speed [m/s]")
     ax2.set_ylabel("speed [m/s]", color="r")

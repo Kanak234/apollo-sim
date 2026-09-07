@@ -19,11 +19,10 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
-
-from bodies import MOON, G0
 import engine
 import kepler
+import numpy as np
+from bodies import G0, MOON
 
 LM_WET = 15_100.0
 LM_PROP = 8_200.0
@@ -64,19 +63,30 @@ def fly_descent(dt: float = 0.05):
                 return (0.0, 0.0, 0.0)
 
             if phase == "BRAKING":
-                if v_h < 15.0 or alt < 2_500.0:
+                if v_h < 30.0 or alt < 2_000.0:
                     phase = "APPROACH"
                 else:
-                    return (DPS_MAX, -hx, -hy)     # full retrograde
+                    g_loc = MOON.mu / (r * r)
+                    g_eff = g_loc - (v_h ** 2) / r
+                    prog = max(0.0, min(1.0, 1.0 - v_h / 1692.0))
+                    alt_ref = 15_240.0 * (1.0 - prog) + 2_000.0 * prog
+                    v_up_ref = -30.0 * math.sin(prog * math.pi)
+                    a_up = g_eff + 0.15 * (v_up_ref - v_up) + 0.01 * (alt_ref - alt)
+                    a_avail = DPS_MAX / ss[4]
+                    a_up = max(-a_avail * 0.4, min(a_avail * 0.85, a_up))
+                    a_h = math.sqrt(max(0.0, a_avail**2 - a_up**2))
+                    ax = a_up * rx - (hx / max(v_h, 0.1)) * a_h
+                    ay = a_up * ry - (hy / max(v_h, 0.1)) * a_h
+                    return (DPS_MAX, ax, ay)
 
             if phase == "APPROACH":
-                if alt < 150.0 and v_h < 3.0:
+                if alt < 120.0 and v_h < 3.0:
                     phase = "LANDING"
                 else:
                     # kill remaining horizontal velocity + control sink
-                    sink_target = -max(3.0, alt / 40.0)    # m/s downward
+                    sink_target = -max(2.0, min(15.0, alt / 25.0))
                     g_loc = MOON.mu / (r * r)
-                    a_up = g_loc + 0.6 * (sink_target - v_up)
+                    a_up = g_loc + 0.8 * (sink_target - v_up)
                     a_h = 0.8 * v_h
                     ax = a_up * rx + (-hx / max(v_h, 0.1)) * a_h
                     ay = a_up * ry + (-hy / max(v_h, 0.1)) * a_h
@@ -86,10 +96,12 @@ def fly_descent(dt: float = 0.05):
 
             # LANDING: vertical, proportional sink control to 1 m/s
             g_loc = MOON.mu / (r * r)
-            sink_target = -1.0 if alt < 30.0 else -min(3.0, alt / 15.0)
-            a_up = g_loc + 1.0 * (sink_target - v_up)
+            sink_target = -0.8 if alt < 25.0 else -min(2.0, alt / 15.0)
+            a_up = g_loc + 1.2 * (sink_target - v_up)
             thrust = max(0.0, min(DPS_MAX, ss[4] * a_up))
-            return (thrust, rx, ry)
+            ax = a_up * rx - 0.6 * hx
+            ay = a_up * ry - 0.6 * hy
+            return (thrust, ax, ay)
         return ctrl
 
     ctrl = ctrl_factory()
@@ -98,7 +110,7 @@ def fly_descent(dt: float = 0.05):
         r = math.hypot(s[0], s[1])
         if r <= MOON.radius:
             break
-        thrust, ux, uy = ctrl(t, s)
+        thrust, _ux, _uy = ctrl(t, s)
         if thrust > 0.0:
             dv_used += thrust / s[4] * dt
         s = engine.rk4(t, s, dt, MOON, ctrl, ve, m_min=m_dry)

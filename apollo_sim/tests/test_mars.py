@@ -1,13 +1,14 @@
 """Phases 13-15 checks: Lambert, windows, depots, ISRU, Mars EDL."""
 import math
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import marsops as mo
+import marstransfer as mt
 import numpy as np
 import pytest
-
-import marstransfer as mt
-import marsops as mo
 from bodies import EARTH, MARS, SUN
 
 
