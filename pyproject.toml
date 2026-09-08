@@ -17,9 +17,14 @@ dev = [
     "pytest>=7.0.0",
     "ruff>=0.4.0",
 ]
+# lunar_lander/display.py renders the DSKY/terrain view with pygame. Nothing
+# under test imports it, so the suite runs without this installed.
+sim = [
+    "pygame>=2.5",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["apollo_sim/tests"]
+testpaths = ["apollo_sim/tests", "lunar_lander"]
 pythonpath = ["apollo_sim"]
 addopts = "-ra"
 
