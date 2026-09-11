@@ -1,0 +1,13 @@
+.git
+.github
+.vscode
+dist
+build
+*.egg-info
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.coverage
+htmlcov
+docs
