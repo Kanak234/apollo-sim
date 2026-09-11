@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "apollo-sim"
-version = "0.1.0"
+version = "0.2.0"
 description = "High-precision orbital mechanics, Saturn V ascent, lunar transfer, landing, and rendezvous simulation"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,21 +12,29 @@ dependencies = [
     "numpy>=1.24.0",
 ]
 
+[project.scripts]
+apollo-sim = "apollo_sim.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
     "ruff>=0.4.0",
+    "mypy>=1.8.0",
 ]
-# lunar_lander/display.py renders the DSKY/terrain view with pygame. Nothing
-# under test imports it, so the suite runs without this installed.
+# lunar_lander/display.py renders the DSKY/terrain view with pygame.
 sim = [
     "pygame>=2.5",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["apollo_sim*", "lunar_lander*"]
+
 [tool.pytest.ini_options]
 testpaths = ["apollo_sim/tests", "lunar_lander"]
-pythonpath = ["apollo_sim"]
-addopts = "-ra"
+pythonpath = [".", "apollo_sim"]
+addopts = "-ra --cov=apollo_sim --cov-report=term-missing --cov-fail-under=85"
 
 [tool.ruff]
 line-length = 100

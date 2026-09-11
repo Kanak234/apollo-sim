@@ -1,17 +1,40 @@
+# Environments & virtualenvs
+venv/
+.venv/
+env/
 .env
 .env.*
 !.env.example
+
+# Secrets
 *.pem
 *.key
 *credentials*
+
+# Bytecode & Caches
 __pycache__/
 *.pyc
-node_modules/
-target/
-venv/
-.venv/
+*.pyo
+*.pyd
+
+# Test & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build & Distribution
 dist/
 build/
+*.egg-info/
+*.whl
+*.tar.gz
+
+# Generated plots
+*.png
+
+# External dependencies and models
+node_modules/
+target/
 *.gguf
 *.pt
 *.safetensors
